@@ -1,0 +1,1 @@
+Bot to inform availability of something with email. I don't want to specify what is this bot used for that's why the config file might include something that could be written to the script itself. Running this with cron on Linux server.
