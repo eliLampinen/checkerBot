@@ -91,14 +91,18 @@ def has_recent_errors():
     try:
         with open(error_log_path, 'r') as file:
             for line in file:
-                timestamp_str = line.split("]")[0].strip("[")
-                error_timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                
-                if now - timedelta(hours=24) <= error_timestamp:
-                    recent_errors_count += 1
-                    
-                    if recent_errors_count > ERROR_THRESHOLD:
-                        return True
+                line = line.strip()
+                if line:  # Skip empty lines
+                    try:
+                        timestamp_str = line.split("]")[0].strip("[")
+                        error_timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                        if now - timedelta(hours=24) <= error_timestamp:
+                            recent_errors_count += 1
+                            if recent_errors_count > ERROR_THRESHOLD:
+                                return True
+                    except ValueError:
+                        # If the line doesn't match the format, skip it
+                        continue
         return False
     except Exception as e:
         log_error(f"An error occurred while reading the log file: {e}")
