@@ -10,7 +10,7 @@ import time
 import random
 from configFile import (email_sender, email_password, email_receivers, email_subject,
                      availability_file, error_log_path, info_log_path,
-                     base_url, availability_update_message, from_hour, to_hour, admin_email)
+                     base_url, availability_update_message, from_hour, to_hour, admin_email, alert_sent_log_path)
 
 ERROR_THRESHOLD = 10
 DAYS_TO_ITERATE = 5
@@ -131,6 +131,30 @@ def alert_admin_for_constant_errors():
     finally:
         server.quit()
 
+def has_alert_been_sent_today():
+    """
+    Dont spam the admin, so read the last error email sent date.
+    """
+    if not os.path.exists(alert_sent_log_path):
+        return False
+
+    with open(alert_sent_log_path, 'r') as file:
+        last_sent_date_str = file.read().strip()
+        if last_sent_date_str:
+            last_sent_date = datetime.strptime(last_sent_date_str, "%Y-%m-%d")
+            if last_sent_date.date() == datetime.now().date():
+                return True
+    return False
+
+def log_alert_sent(alert_sent_log_path):
+    """
+    Write to error sent email file.
+    """
+    with open(alert_sent_log_path, 'w') as file:
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        file.write(today_str)
+
+
 def check_availability():
     """
     Check the availability of the thing by reading the HTML with BeautifulSoup. 
@@ -185,8 +209,9 @@ def check_availability():
     if slots_to_email:
         send_email(slots_to_email)
 
-    if has_recent_errors():
+    if has_recent_errors() and not has_alert_been_sent_today():
         alert_admin_for_constant_errors()
+        log_alert_sent()
 
 if __name__ == "__main__":
     check_availability()
