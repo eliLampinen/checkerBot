@@ -7,9 +7,13 @@ from email.mime.multipart import MIMEMultipart
 import json
 import os
 import time
+import random
 from configFile import (email_sender, email_password, email_receivers, email_subject,
                      availability_file, error_log_path, info_log_path,
-                     base_url, availability_update_message, from_hour, to_hour)
+                     base_url, availability_update_message, from_hour, to_hour, admin_email)
+
+ERROR_THRESHOLD = 10
+DAYS_TO_ITERATE = 5
 
 def log_error(message):
     """Append an error message to the error log file."""
@@ -45,6 +49,9 @@ def save_availability(availability):
         log_error(f"Error saving availability: {e}")
 
 def send_email(slots):
+    """
+    Send email to the customer. Create the body from slots argument. 
+    """
     msg = MIMEMultipart()
     msg['From'] = email_sender
     msg['To'] = ", ".join(email_receivers)
@@ -74,13 +81,65 @@ def send_email(slots):
     finally:
         server.quit()
 
+def has_recent_errors():
+    """
+    Check if there are more than a specified number of errors logged in the past specified hours.
+    """
+    now = datetime.now()
+    recent_errors_count = 0
+    
+    try:
+        with open(error_log_path, 'r') as file:
+            for line in file:
+                timestamp_str = line.split("]")[0].strip("[")
+                error_timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                
+                if now - timedelta(hours=24) <= error_timestamp:
+                    recent_errors_count += 1
+                    
+                    if recent_errors_count > ERROR_THRESHOLD:
+                        return True
+        return False
+    except Exception as e:
+        log_error(f"An error occurred while reading the log file: {e}")
+        return False
+
+def alert_admin_for_constant_errors():
+    """
+    Alert admin user for constant errors
+    """
+    msg = MIMEMultipart()
+    msg['From'] = email_sender
+    msg['To'] = ", ".join(admin_email)
+    msg['Subject'] = "Availability script might be broken!"
+
+    body = f"More than {ERROR_THRESHOLD} errors occured in the past 24 hours with the availability script, check the logs."
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.ehlo()
+        server.login(email_sender, email_password)
+        server.sendmail(email_sender, admin_email, msg.as_string())
+        log_info(f"Admin user alerted for constant errors.")
+    except Exception as e:
+        log_error(f"Failed to send email: {e}")
+    finally:
+        server.quit()
+
 def check_availability():
-    log_info("Starting to run")
+    """
+    Check the availability of the thing by reading the HTML with BeautifulSoup. 
+    Check DAYS_TO_ITERATE amount of days including today. 
+    """
+    # Log on avg once per hour
+    if random.randint(0, 11) == 9:
+        log_info("Starting to run")
     previous_availability = load_availability()
     current_availability = {}
     slots_to_email = []
 
-    for day in range(6):
+    for day in range(DAYS_TO_ITERATE):
         time.sleep(5) # Dont spam too hard the server, just in case
         date = (datetime.now() + timedelta(days=day)).strftime('%d.%m.%Y')
         url = f'{base_url}{date}'
@@ -121,6 +180,9 @@ def check_availability():
 
     if slots_to_email:
         send_email(slots_to_email)
+
+    if has_recent_errors():
+        alert_admin_for_constant_errors()
 
 if __name__ == "__main__":
     check_availability()
