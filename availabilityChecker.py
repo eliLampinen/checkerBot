@@ -146,7 +146,7 @@ def has_alert_been_sent_today():
                 return True
     return False
 
-def log_alert_sent(alert_sent_log_path):
+def log_alert_sent():
     """
     Write to error sent email file.
     """
@@ -160,8 +160,8 @@ def check_availability():
     Check the availability of the thing by reading the HTML with BeautifulSoup. 
     Check DAYS_TO_ITERATE amount of days including today. 
     """
-    # Log on avg once per hour
-    if random.randint(0, 11) == 9:
+    current_time = datetime.now()
+    if current_time.minute < 6:  # Assuming the script runs every 5 minutes, log only if it's the first run of the hour
         log_info("Starting to run")
     previous_availability = load_availability()
     current_availability = {}
